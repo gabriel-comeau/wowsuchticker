@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -13,10 +14,12 @@ const (
 	DOGE_ID        int    = 132
 	RETRY_ATTEMPTS int    = 5
 	RETRY_DELAY           = 5
+	LOG_FILE_NAME  string = ".wst_log"
 )
 
 var (
 	currentRetryCount int = 0
+	logFile           *os.File
 )
 
 // Represents the overall ApiResponse (made up of a market which has many trades)
@@ -67,20 +70,23 @@ type Order struct {
 }
 
 func main() {
+	openLogFile()
+	defer closeLogFile()
+
 	data := makeApiRequest()
 
 	var apiresp ApiResponse
 
 	err := json.Unmarshal(data, &apiresp)
 	if err != nil {
-		fmt.Println("Error occurred while parsing api response data:", err.Error())
+		writeLogLine(fmt.Sprintf("Error occurred while parsing api response data: %v\n", err.Error()))
 	}
 
 	label := apiresp.Return.Markets["DOGE"].Label
 	val := apiresp.Return.Markets["DOGE"].LastTradePrice
 
+	writeLogLine(fmt.Sprintf("SUCCESS: %v : %v\n", label, val))
 	fmt.Printf("%v : %v\n", label, val)
-
 }
 
 // Perform the actual HTTP request to the API and return the response
@@ -90,7 +96,7 @@ func makeApiRequest() []byte {
 
 	resp, err := http.Get(reqUrl)
 	if err != nil {
-		fmt.Println("ERROR OCCURRED DURING HTTP REQUEST:", err.Error())
+		writeLogLine(fmt.Sprintf("ERROR OCCURRED DURING HTTP REQUEST: %v\n", err.Error()))
 	}
 
 	status := resp.StatusCode
@@ -104,7 +110,7 @@ func makeApiRequest() []byte {
 				return makeApiRequest()
 			}
 		} else {
-			fmt.Println("ERROR STATUS RETURNED: ", status)
+			writeLogLine(fmt.Sprintf("ERROR STATUS RETURNED: %v\n", status))
 			return nil
 		}
 	}
@@ -114,4 +120,41 @@ func makeApiRequest() []byte {
 	body.Close()
 
 	return bodyText
+}
+
+func getLogFilePath() string {
+	path := os.Getenv("HOME")
+	return path + "/" + LOG_FILE_NAME
+}
+
+// Sets the logFile file pointer to the log file
+func openLogFile() {
+
+	filePtr, err := os.OpenFile(getLogFilePath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		fmt.Println("Couldn't open logfile for writing:", err.Error())
+		return
+	} else {
+		logFile = filePtr
+	}
+}
+
+// Closes the logFile if it is open
+func closeLogFile() {
+	if logFile != nil {
+		logFile.Close()
+	}
+}
+
+func writeLogLine(text string) {
+	if logFile != nil {
+		// Add the timestamp to the string
+		currentTime := time.Now()
+		writeOut := fmt.Sprintf("%v : %v", currentTime, text)
+		bytes := []byte(writeOut)
+		_, err := logFile.Write(bytes)
+		if err != nil {
+			fmt.Println("ERROR WRITING TO LOGFILE:", err.Error())
+		}
+	}
 }
