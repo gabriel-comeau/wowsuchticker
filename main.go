@@ -124,7 +124,15 @@ func makeApiRequest() []byte {
 
 func getLogFilePath() string {
 	path := os.Getenv("HOME")
-	return path + "/" + LOG_FILE_NAME
+	pathStr := ""
+	if path != "" {
+		pathStr = path + "/" + LOG_FILE_NAME
+	} else {
+		pathStr = LOG_FILE_NAME
+	}
+
+	return pathStr
+
 }
 
 // Sets the logFile file pointer to the log file
